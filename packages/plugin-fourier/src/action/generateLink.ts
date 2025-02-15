@@ -59,17 +59,7 @@ function isGenerateLink(
 
 const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory
 
-{{recentMessages}}
-
-Given the recent messages , extract the following information about the requested generation Link:
--Title of the Payment
--Description of the Payment , let this be the summary of the payment
--Amount of the payment , let the amount be a number e.g 10USDC -> 10 , 20USDC -> 20
--address of the user to accept payment
--other details the user wants to collect from the payer.(like name , age , job description etc)...
-
-Respond with a JSON markdown block containing only the extracted values.
-
+Example response:
 \`\`\`json
 {
    "title":"Contribution for Davids Graduation Ceremony",
@@ -79,6 +69,18 @@ Respond with a JSON markdown block containing only the extracted values.
    "details":{}
 }
 \`\`\`
+
+
+Given the recent messages , extract the following information about the requested generation Link:
+-Title of the Payment
+-Description of the Payment , let this be the summary of the payment
+-Amount of the payment , let the amount be a number e.g 10USDC -> 10 , 20USDC -> 20
+-address of the user to accept payment
+-other details the user wants to collect from the payer.(like name , age , job description etc)...
+
+Here are the recent user messages for context:
+{{recentMessages}}
+
 `;
 
 // Database operations
@@ -274,13 +276,30 @@ export const generateAction: Action = {
                     content: {
                         title: "Wedding Contribution",
                         description: "My Wedding Contribution",
-                        amount: '1000',
+                        amount: '10',
                         token: "USDC",
                         address: "0x62727dshsh7328"
                     },
                     action: "CREATE_LINK"
                 }
-            }
+            },
+            {
+                user: "{{agent)}}",
+                content: {
+                    text: "Would you like me to create another link for you",
+                }
+            },
+            {
+                user: "{{user1}}",
+                content: {
+                    text: "No"
+                }
+            }, {
+                user: "{{agent)}}",
+                content: {
+                    text: "Thank you for using Fourier.",
+                }
+            },
         ],
     ],
 
