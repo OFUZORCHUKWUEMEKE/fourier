@@ -60,6 +60,7 @@
         "@elizaos/plugin-evm": "workspace:*",
         "@elizaos/plugin-edwin": "workspace:*",
         "@elizaos/plugin-flow": "workspace:*",
+        "@elizaos/plugin-fourier": "workspace:*",
         "@elizaos/plugin-gelato": "workspace:*",
         "@elizaos/plugin-giphy": "workspace:*",
         "@elizaos/plugin-gitbook": "workspace:*",
