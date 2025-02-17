@@ -1,8 +1,8 @@
 import type {
-     IAgentRuntime,
-     Provider,
-     Memory,
-     State,
+    IAgentRuntime,
+    Provider,
+    Memory,
+    State,
 } from "@elizaos/core";
 import { EVM, createConfig, getToken } from "@lifi/sdk";
 import type {
@@ -281,14 +281,14 @@ export class WalletProvider {
 
         const viemChain: Chain = customRpcUrl
             ? {
-                  ...baseChain,
-                  rpcUrls: {
-                      ...baseChain.rpcUrls,
-                      custom: {
-                          http: [customRpcUrl],
-                      },
-                  },
-              }
+                ...baseChain,
+                rpcUrls: {
+                    ...baseChain.rpcUrls,
+                    custom: {
+                        http: [customRpcUrl],
+                    },
+                },
+            }
             : baseChain;
 
         return viemChain;

@@ -117,6 +117,12 @@ export const generateAction: Action = {
     name: "generateLink",
     similes: ["CREATE_LINK", "GENERATE LINK", "CREATE_PAYMENT"],
     description: "Generate Link for the user",
+    validate: async (
+        runtime: IAgentRuntime,
+    ) => {
+        console.log("Creating a Payment Link")
+        return true
+    },
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
@@ -154,6 +160,7 @@ export const generateAction: Action = {
             })
             return false
         }
+        const { data, error } = await supabase.from("users").select("*").eq('agent_id', state.agentId);
         try {
             const { data, error } = await supabase.from("users").select("*").eq('agent_id', state.agentId);
             if (data.length === 0) {
@@ -231,12 +238,7 @@ export const generateAction: Action = {
         console.log("Generated content:", content);
         return true
     },
-    validate: async (
-        runtime: IAgentRuntime,
-    ) => {
-        console.log("Creating a Payment Link")
-        return true
-    },
+
     examples: [
         [
             {
