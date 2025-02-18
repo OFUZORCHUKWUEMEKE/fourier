@@ -59,7 +59,6 @@ function isGenerateLink(
 
 
 const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values (title,description,amount,address and details) , make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory. Only extract values beginning from the last time a payment link was created from the recent messages.
-Do not create a link until the user has given you the amount , the title , the details and the address. Insist on getting this details before creating a link
 
 Example response:
 \`\`\`json
@@ -116,9 +115,9 @@ async function getOrCreateUser(supabase: any, agentId: string) {
 }
 
 export const generateAction: Action = {
-    name: "generateLink",
+    name: "GENERATELINK",
     similes: ["CREATE_LINK", "GENERATE LINK", "CREATE_PAYMENT"],
-    description: "Generate Link for the user",
+    description: "Generate payment Link for the user after collecting the title of payment , amount to collect , wallet address and details to collect",
     validate: async (
         runtime: IAgentRuntime,
     ) => {
@@ -138,12 +137,48 @@ export const generateAction: Action = {
         } else {
             state = await runtime.updateRecentMessageState(state)
         };
-        console.log("recentMessages", state.recentMessages);
+        // console.log("recentMessages", state.recentMessages);
         const recentMessagesData = await runtime.messageManager.getMemories({
             roomId: message.roomId,
             count: 10,
             unique: false,
         });
+        // console.log(recentMessagesData);
+        const isLatestMessageOlderThan24Hours = (messages: any): boolean => {
+            // Get the latest message
+            const latestMessage = messages.reduce((latest, current) => {
+                return latest.createdAt > current.createdAt ? latest : current;
+            });
+
+            // Get current time in milliseconds
+            const now = Date.now();
+
+            // Calculate 24 hours in milliseconds
+            const twentyFourHours = 24 * 60 * 60 * 1000;
+
+            // Check if the time difference is greater than or equal to 24 hours
+            const timeDifference = now - latestMessage.createdAt;
+
+            return timeDifference >= twentyFourHours;
+        };
+
+        console.log("time difference", isLatestMessageOlderThan24Hours(recentMessagesData));
+
+        const debugTimeDifference = (messages: any): void => {
+            const latestMessage = messages.reduce((latest, current) => {
+                return latest.createdAt > current.createdAt ? latest : current;
+            });
+
+            const now = Date.now();
+            const timeDifference = now - latestMessage.createdAt;
+            const hoursAgo = timeDifference / (60 * 60 * 1000);
+
+            console.log(`Latest message was ${hoursAgo.toFixed(2)} hours ago`);
+            console.log('Latest message timestamp:', new Date(latestMessage.createdAt).toLocaleString());
+            console.log('Current time:', new Date().toLocaleString());
+        };
+
+        console.log("time difference exact", debugTimeDifference(recentMessagesData));
 
         const getContent = composeContext({
             state,
@@ -154,7 +189,7 @@ export const generateAction: Action = {
             context: getContent,
             modelClass: ModelClass.SMALL
         });
-        console.log(content);
+        // console.log(content);
         const transferContent = content as GenerateLink;
         const supabaseUrl = 'https://gowfvrwxcjffdazpttem.supabase.co';
         const SUPABASE_KEY = runtime.getSetting("SUPABASE_KEY");
@@ -163,7 +198,7 @@ export const generateAction: Action = {
         if (!isGenerateLink(transferContent)) {
             console.error("Invalid content for TRANSFER TOKEN");
             callback({
-                text: "Unable to process transfer request. Invalid content provided.",
+                text: "Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill",
                 content: { error: "Invalid transfer content" }
             })
             return false
@@ -228,7 +263,7 @@ export const generateAction: Action = {
                     console.error('Insert error:', error); // Debug log
                     throw error;
                 }
-                console.log('Insert successful:', Newdata); // Debug log
+                // console.log('Insert successful:', Newdata); // Debug log
                 callback({
                     text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}`,
                     content: { text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}` }

@@ -11,11 +11,41 @@ import {
 } from "@elizaos/core";
 import { createClient } from '@supabase/supabase-js';
 
+const isLatestMessageOlderThan24Hours = (messages: any): boolean => {
+    // Get the latest message
+    const latestMessage = messages.reduce((latest, current) => {
+        return latest.createdAt > current.createdAt ? latest : current;
+    });
+
+    // Get current time in milliseconds
+    const now = Date.now();
+
+    // Calculate 24 hours in milliseconds
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    // Check if the time difference is greater than or equal to 24 hours
+    const timeDifference = now - latestMessage.createdAt;
+
+    return timeDifference >= twentyFourHours;
+};
+
 export const onboard: Action = {
     name: "",
     description: "",
     similes: ["REGISTER", "CREATE_ACCOUNT", "NEW_USER", "SIGNUP_USER", "JOIN_NOW", "SETUP_ACCOUNT", "USER_LOGIN", "ENTER_ACCOUNT", "LOG_INTO_SYSTEM", "AUTHENTICATE"],
-    validate: async () => {
+    validate: async (
+        runtime: IAgentRuntime, message: Memory
+    ) => {
+        const recentMessagesData = await runtime.messageManager.getMemories({
+            roomId: message.roomId,
+            count: 10,
+            unique: false,
+        });
+        if (isLatestMessageOlderThan24Hours(recentMessagesData)) {
+            return true
+        } else {
+            false
+        }
         return true
     },
     handler: async (
