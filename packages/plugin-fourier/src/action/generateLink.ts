@@ -8,6 +8,7 @@ import {
     ModelClass,
     type State,
     type Action,
+    formatMessages
 } from "@elizaos/core";
 import { createClient } from '@supabase/supabase-js';
 import { generateUniqueCode } from "../utils";
@@ -57,7 +58,7 @@ function isGenerateLink(
 
 
 
-const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory
+const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory. Only extract values beginning from the last time a payment link was created from the recent messages.
 
 Example response:
 \`\`\`json
@@ -136,6 +137,14 @@ export const generateAction: Action = {
         } else {
             state = await runtime.updateRecentMessageState(state)
         };
+        console.log("recentMessages", state.recentMessages);
+        const recentMessagesData = await runtime.messageManager.getMemories({
+            roomId: message.roomId,
+            count: 10,
+            unique: false,
+        });
+
+        console.log(recentMessagesData)
 
         const getContent = composeContext({
             state,
@@ -175,7 +184,6 @@ export const generateAction: Action = {
                     .single();
 
                 if (createError) throw createError;
-                console.log("New User",)
                 const code = generateUniqueCode();
                 const { data, error } = await supabase.from("payments").insert([{
                     title: content.title,
@@ -202,8 +210,6 @@ export const generateAction: Action = {
                         id: `${data[0]?.id}`
                     }]
                 })
-                console.log("payment", data)
-                console.log("user", newUser)
             } else {
                 const code = generateUniqueCode();
                 const { data: Newdata, error } = await supabase.from("payments").insert([{
@@ -235,7 +241,6 @@ export const generateAction: Action = {
                 content: { error: "Error in Payment Generation" }
             })
         }
-        console.log("Generated content:", content);
         return true
     },
 

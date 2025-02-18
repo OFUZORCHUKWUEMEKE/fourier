@@ -11,36 +11,11 @@ import {
 } from "@elizaos/core";
 import { createClient } from '@supabase/supabase-js';
 
-
-const createProfileTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the name , username , email , phonenumber and username.
-Example response:
-\`\`\`json
-{
-   "name":"Emekes Business",
-   "username":"emeke",
-   "phone":07036226327,
-   "email":"uniben2018@gmail.com"
-}
-\`\`\`
-Given the recent messages , extract the following information about the requested user profile:
--Name of the Business,DAO 
--Username of the Business , this would be required
--Phone number of the business
--Email of the Business , used for verification of user profile
-
-Here are the recent user messages for context:
-{{recentMessages}}
-`
-
-
-export const createProfile: Action = {
-    name: "Create Profile",
-    description: "Create a user Profile and save to database",
-    similes: ["CREATE_PROFILE", "GENERATE_PROFILE", "SETUP_PROFILE", "INITIALIZE_PROFILE", "REGISTER_PROFILE", "CREATE_ACCOUNT", "SET_PROFILE", "PROFILE_SETUP"],
-    validate: async (
-        runtime: IAgentRuntime,
-    ) => {
-        console.log("Creating a Payment Link")
+export const onboard: Action = {
+    name: "",
+    description: "",
+    similes: ["REGISTER", "CREATE_ACCOUNT", "NEW_USER", "SIGNUP_USER", "JOIN_NOW", "SETUP_ACCOUNT", "USER_LOGIN", "ENTER_ACCOUNT", "LOG_INTO_SYSTEM", "AUTHENTICATE"],
+    validate: async () => {
         return true
     },
     handler: async (
