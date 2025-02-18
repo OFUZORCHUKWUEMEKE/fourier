@@ -58,7 +58,8 @@ function isGenerateLink(
 
 
 
-const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory. Only extract values beginning from the last time a payment link was created from the recent messages.
+const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values (title,description,amount,address and details) , make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory. Only extract values beginning from the last time a payment link was created from the recent messages.
+Do not create a link until the user has given you the amount , the title , the details and the address. Insist on getting this details before creating a link
 
 Example response:
 \`\`\`json
@@ -143,8 +144,6 @@ export const generateAction: Action = {
             count: 10,
             unique: false,
         });
-
-        console.log(recentMessagesData)
 
         const getContent = composeContext({
             state,
