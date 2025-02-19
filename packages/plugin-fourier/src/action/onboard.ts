@@ -44,7 +44,7 @@ export const onboard: Action = {
         if (isLatestMessageOlderThan24Hours(recentMessagesData)) {
             return true
         } else {
-            false
+            return false
         }
         return true
     },

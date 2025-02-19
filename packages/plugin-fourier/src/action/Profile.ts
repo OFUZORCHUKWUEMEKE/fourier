@@ -11,20 +11,45 @@ import {
 } from "@elizaos/core";
 import { createClient } from '@supabase/supabase-js';
 
-
+interface Profile extends Content {
+    name: string;
+    username: string;
+    description: string;
+    phone: string | number;
+    businesstype: string;
+    email: string;
+}
+function isProfile(
+    content: Profile
+): content is Profile {
+    elizaLogger.log("Content for transfer", content);
+    return (
+        typeof content.name === "string" &&
+        typeof content.username === "string" &&
+        typeof content.description == "string" &&
+        typeof content.email === "string" &&
+        typeof content.businesstype === "string" &&
+        (typeof content.phone === "string" || typeof content.phone === "number" &&
+            typeof content.phone === "number")
+    )
+}
+const SUPABASE_URL = 'https://gowfvrwxcjffdazpttem.supabase.co';
 const createProfileTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the name , username , email , phonenumber and username.
 Example response:
 \`\`\`json
 {
    "name":"Emekes Business",
+   "description":"My Business "
    "username":"emeke",
    "phone":07036226327,
    "email":"uniben2018@gmail.com"
+   "businesstype":"crypto DAO"
 }
 \`\`\`
 Given the recent messages , extract the following information about the requested user profile:
 -Name of the Business,DAO 
 -Username of the Business , this would be required
+-Description of your business
 -Phone number of the business
 -Email of the Business , used for verification of user profile
 
@@ -32,15 +57,29 @@ Here are the recent user messages for context:
 {{recentMessages}}
 `
 
+// Database operations
+async function getOrCreateUser(supabase: any, roomId: string) {
+    const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert([
+
+        ])
+        .select()
+        .single();
+
+    if (createError) throw createError;
+    return newUser;
+}
+
 
 export const createProfile: Action = {
-    name: "Create Profile",
-    description: "Create a user Profile and save to database",
+    name: "CREATE_PROFILE",
+    description: "Checks if the user has created a profile if not create a profile for the user",
     similes: ["CREATE_PROFILE", "GENERATE_PROFILE", "SETUP_PROFILE", "INITIALIZE_PROFILE", "REGISTER_PROFILE", "CREATE_ACCOUNT", "SET_PROFILE", "PROFILE_SETUP"],
     validate: async (
         runtime: IAgentRuntime,
     ) => {
-        console.log("Creating a Payment Link")
+        console.log("Checking Users Profile")
         return true
     },
     handler: async (
@@ -56,6 +95,42 @@ export const createProfile: Action = {
         } else {
             state = await runtime.updateRecentMessageState(state)
         };
+        console.log("Make sure you create profile")
+        const getContent = composeContext({
+            state,
+            template: createProfileTemplate
+        })
+        const content = await generateObjectDeprecated({
+            runtime,
+            context: getContent,
+            modelClass: ModelClass.SMALL
+        });
+
+        const transferContent = content as Profile;
+        const supabaseUrl = SUPABASE_URL;
+        const SUPABASE_KEY = runtime.getSetting("SUPABASE_KEY");
+        const supabase = createClient(supabaseUrl, SUPABASE_KEY);
+        if (!isProfile(transferContent)) {
+            console.error("Make sure you provide the necessary details for creation of profile , like name , email , phonenumber , email");
+            callback({
+                text: "Make sure you provide the nessary details for creation of your user profile. name , username , phone number , email"
+            })
+            return false
+        }
+        try {
+            const { data } = await supabase.from("users").insert([
+                {
+                    name: content.name,
+                    description: content.description,
+                    business_type: content.business_type || null, // Optional
+                    room_id: message.roomId,
+                    agent_id: state.agent_id,
+                }
+            ]).select()
+                .single();
+        } catch (error) {
+
+        }
         return true
     },
     examples: [
@@ -106,7 +181,7 @@ export const createProfile: Action = {
             {
                 "user": "{{agent}}",
                 "content": {
-                    "text": "Your profile has been created successfully! Would you like to update any details?"
+                    "text": "Your profile has been created successfully! , Now you can create a payment link. Would you like to update any details?"
                 }
             },
             {

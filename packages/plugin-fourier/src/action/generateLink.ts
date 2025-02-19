@@ -13,7 +13,6 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { generateUniqueCode } from "../utils";
 
-let runtime: IAgentRuntime
 
 interface GenerateLink extends Content {
     title: string;
@@ -21,19 +20,6 @@ interface GenerateLink extends Content {
     amount: string | number;
     address: string;
     details: object;
-}
-
-interface PaymentData {
-    title: string;
-    code: string;
-    payment_description?: string;
-    amount: number;
-    address: string;
-    details: Record<string, any>;
-    agent_id: string;
-    user_id: string;
-    token_types: string[];
-    chains: string[];
 }
 
 // Constants
@@ -84,35 +70,47 @@ Here are the recent user messages for context:
 
 `;
 
-// Database operations
-async function getOrCreateUser(supabase: any, agentId: string) {
-    const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq('agent_id', agentId)
-        .single();
-
-    if (error && error.code !== 'PGRST116') {
-        throw error;
+function getLatestMessage(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return null;
     }
 
-    if (!data) {
-        const { data: newUser, error: createError } = await supabase
-            .from('users')
-            .insert([{
-                agent_id: agentId,
-                payment_links_count: 0,
-                total_amount: 0
-            }])
-            .select()
-            .single();
+    // Sort messages by createdAt in descending order and take the first one
+    const latestMessage = messages.reduce((latest, current) => {
+        return latest.createdAt > current.createdAt ? latest : current;
+    });
 
-        if (createError) throw createError;
-        return newUser;
-    }
-
-    return data;
+    return {
+        id: latestMessage.id,
+        content: latestMessage.content,
+        createdAt: new Date(latestMessage.createdAt),
+        type: latestMessage.type,
+        roomId: latestMessage.roomId,
+        agentId: latestMessage.agentId
+    };
 }
+
+const isLatestMessageOlderThan24Hours = (messages: any): boolean => {
+    // Get the latest message
+    const latestMessage = messages.reduce((latest, current) => {
+        return latest.createdAt > current.createdAt ? latest : current;
+    });
+
+    // Get current time in milliseconds
+    const now = Date.now();
+
+    // Calculate 24 hours in milliseconds
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    // Check if the time difference is greater than or equal to 24 hours
+    const timeDifference = now - latestMessage.createdAt;
+
+    return timeDifference >= twentyFourHours;
+};
+
+
+
+
 
 export const generateAction: Action = {
     name: "GENERATELINK",
@@ -120,8 +118,16 @@ export const generateAction: Action = {
     description: "Generate payment Link for the user after collecting the title of payment , amount to collect , wallet address and details to collect",
     validate: async (
         runtime: IAgentRuntime,
+        message: Memory,
+        state: State,
+        // callback: HandlerCallback
     ) => {
         console.log("Creating a Payment Link")
+        const SUPABASE_KEY = runtime.getSetting("SUPABASE_KEY");
+        if (!SUPABASE_KEY) {
+            return false
+        }
+
         return true
     },
     handler: async (
@@ -137,48 +143,20 @@ export const generateAction: Action = {
         } else {
             state = await runtime.updateRecentMessageState(state)
         };
-        // console.log("recentMessages", state.recentMessages);
+        // console.log("recentMessages", state.recentMessagesData);
+        // console.log("Latest Messages", getLatestMessage(state.recentMessagesData));
+        console.log("message", message);
         const recentMessagesData = await runtime.messageManager.getMemories({
             roomId: message.roomId,
             count: 10,
             unique: false,
         });
+        // const latest = getLatestMessage(recentMessagesData);
+        // console.log("latest",latest);
+
         // console.log(recentMessagesData);
-        const isLatestMessageOlderThan24Hours = (messages: any): boolean => {
-            // Get the latest message
-            const latestMessage = messages.reduce((latest, current) => {
-                return latest.createdAt > current.createdAt ? latest : current;
-            });
-
-            // Get current time in milliseconds
-            const now = Date.now();
-
-            // Calculate 24 hours in milliseconds
-            const twentyFourHours = 24 * 60 * 60 * 1000;
-
-            // Check if the time difference is greater than or equal to 24 hours
-            const timeDifference = now - latestMessage.createdAt;
-
-            return timeDifference >= twentyFourHours;
-        };
 
         console.log("time difference", isLatestMessageOlderThan24Hours(recentMessagesData));
-
-        const debugTimeDifference = (messages: any): void => {
-            const latestMessage = messages.reduce((latest, current) => {
-                return latest.createdAt > current.createdAt ? latest : current;
-            });
-
-            const now = Date.now();
-            const timeDifference = now - latestMessage.createdAt;
-            const hoursAgo = timeDifference / (60 * 60 * 1000);
-
-            console.log(`Latest message was ${hoursAgo.toFixed(2)} hours ago`);
-            console.log('Latest message timestamp:', new Date(latestMessage.createdAt).toLocaleString());
-            console.log('Current time:', new Date().toLocaleString());
-        };
-
-        console.log("time difference exact", debugTimeDifference(recentMessagesData));
 
         const getContent = composeContext({
             state,
@@ -196,54 +174,59 @@ export const generateAction: Action = {
         const supabase = createClient(supabaseUrl, SUPABASE_KEY);
 
         if (!isGenerateLink(transferContent)) {
-            console.error("Invalid content for TRANSFER TOKEN");
+            console.error("Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill");
             callback({
                 text: "Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill",
-                content: { error: "Invalid transfer content" }
+                content: { error: "Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill" }
             })
             return false
         }
-        const { data, error } = await supabase.from("users").select("*").eq('agent_id', state.agentId);
-        try {
-            const { data, error } = await supabase.from("users").select("*").eq('agent_id', state.agentId);
-            if (data.length === 0) {
-                const { data: newUser, error: createError } = await supabase
-                    .from('users')
-                    .insert([{
-                        agent_id: state.agentId,
-                        payment_links_count: 0,
-                        total_amount: 0
-                    }])
-                    .select()
-                    .single();
+        // const { data, error } = await supabase.from("users").select("*").eq('roomId', message.roomId);
 
-                if (createError) throw createError;
-                const code = generateUniqueCode();
-                const { data, error } = await supabase.from("payments").insert([{
-                    title: content.title,
-                    code: code,
-                    payment_description: content?.description,
-                    amount: Number(content.amount),
-                    address: content.address,
-                    details: content.details,
-                    agent_id: state.agentId,
-                    user_id: newUser?.id,
-                    token_types: ['USDC'],
-                    chains: ['sui'],
-                }]).select();
+        try {
+            const { data, error } = await supabase.from("users").select("*").eq('room_id', message.roomId);
+            if (data.length === 0) {
                 callback({
-                    text: "Successfully created your payment link is",
-                    content: { text: `Successfully created your payment link ...` },
-                    url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
-                    attachments: [{
-                        url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
-                        title: `${content.title} payment link`,
-                        description: `${content?.description || ""}`,
-                        source: `Fourier`,
-                        text: `${content?.description || ""}`,
-                        id: `${data[0]?.id}`
-                    }]
+                    text: "You are not Eligible to create a payment link yet . Make sure you have created your user profile. Would you like to me to help you create a user profile",
+                    action: ""
                 })
+                // const { data: newUser, error: createError } = await supabase
+                //     .from('users')
+                //     .insert([{
+                //         agent_id: state.agentId,
+                //         payment_links_count: 0,
+                //         total_amount: 0
+                //     }])
+                //     .select()
+                //     .single();
+
+                // if (createError) throw createError;
+                // const code = generateUniqueCode();
+                // const { data, error } = await supabase.from("payments").insert([{
+                //     title: content.title,
+                //     code: code,
+                //     payment_description: content?.description,
+                //     amount: Number(content.amount),
+                //     address: content.address,
+                //     details: content.details,
+                //     agent_id: state.agentId,
+                //     user_id: newUser?.id,
+                //     token_types: ['USDC'],
+                //     chains: ['sui'],
+                // }]).select();
+                // callback({
+                //     text: "Successfully created your payment link is",
+                //     content: { text: `Successfully created your payment link ...` },
+                //     url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
+                //     attachments: [{
+                //         url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
+                //         title: `${content.title} payment link`,
+                //         description: `${content?.description || ""}`,
+                //         source: `Fourier`,
+                //         text: `${content?.description || ""}`,
+                //         id: `${data[0]?.id}`
+                //     }]
+                // })
             } else {
                 const code = generateUniqueCode();
                 const { data: Newdata, error } = await supabase.from("payments").insert([{
@@ -263,7 +246,6 @@ export const generateAction: Action = {
                     console.error('Insert error:', error); // Debug log
                     throw error;
                 }
-                // console.log('Insert successful:', Newdata); // Debug log
                 callback({
                     text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}`,
                     content: { text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}` }
