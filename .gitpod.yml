@@ -5,3 +5,7 @@ tasks:
           git fetch --tags
           git checkout $(git describe --tags --abbrev=0)
       command: pnpm install && pnpm run build
+    - name: Install Ollama
+      init: curl -fsSL https://ollama.com/install.sh | sh
+    - name: Start Ollama
+      command: ollama serve &

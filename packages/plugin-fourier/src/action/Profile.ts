@@ -34,7 +34,9 @@ function isProfile(
     )
 }
 const SUPABASE_URL = 'https://gowfvrwxcjffdazpttem.supabase.co';
-const createProfileTemplate = `Respond with a JSON markdown block containing only the extracted values. make sure you get the name , username , email , phonenumber and username.
+const createProfileTemplate = `Respond with a JSON markdown block containing only the extracted values. Ask the user politely for these details,
+name , description , username , phone , email and businesstype
+
 Example response:
 \`\`\`json
 {
@@ -52,25 +54,11 @@ Given the recent messages , extract the following information about the requeste
 -Description of your business
 -Phone number of the business
 -Email of the Business , used for verification of user profile
+-Businesstype like the type of business e.d DAO Project
 
 Here are the recent user messages for context:
 {{recentMessages}}
 `
-
-// Database operations
-async function getOrCreateUser(supabase: any, roomId: string) {
-    const { data: newUser, error: createError } = await supabase
-        .from('users')
-        .insert([
-
-        ])
-        .select()
-        .single();
-
-    if (createError) throw createError;
-    return newUser;
-}
-
 
 export const createProfile: Action = {
     name: "CREATE_PROFILE",
@@ -111,9 +99,9 @@ export const createProfile: Action = {
         const SUPABASE_KEY = runtime.getSetting("SUPABASE_KEY");
         const supabase = createClient(supabaseUrl, SUPABASE_KEY);
         if (!isProfile(transferContent)) {
-            console.error("Make sure you provide the necessary details for creation of profile , like name , email , phonenumber , email");
+            console.error("Make sure you provide the necessary details for creation of profile , like name , email , phonenumber , email , description and businesstype");
             callback({
-                text: "Make sure you provide the nessary details for creation of your user profile. name , username , phone number , email"
+                text: "Make sure you provide the nessary details for creation of your user profile. name , username , phone number , email , description and businesstype"
             })
             return false
         }

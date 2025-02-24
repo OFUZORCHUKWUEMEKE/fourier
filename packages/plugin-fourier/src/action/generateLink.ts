@@ -1,4 +1,4 @@
-import { elizaLogger, composeContext, generateObjectDeprecated } from "@elizaos/core";
+import { elizaLogger, composeContext, generateObjectDeprecated, generateObject } from "@elizaos/core";
 import {
     type ActionExample,
     type Content,
@@ -10,15 +10,24 @@ import {
     type Action,
     formatMessages
 } from "@elizaos/core";
+import { z } from "zod";
 import { createClient } from '@supabase/supabase-js';
 import { generateUniqueCode } from "../utils";
 
 
-interface GenerateLink extends Content {
+// interface GenerateLink extends Content {
+//     title: string;
+//     description: string;
+//     amount: string | number;
+//     address: string;
+//     details: object;
+// }
+
+export interface PaymentLinkContent extends Content {
     title: string;
+    address: string;
     description: string;
     amount: string | number;
-    address: string;
     details: object;
 }
 
@@ -28,9 +37,9 @@ const DEFAULT_TOKEN_TYPES = ['USDC'];
 const DEFAULT_CHAINS = ['sui'];
 const PAYMENT_URL_BASE = 'https://fourier-sui.vercel.app/payment';
 
-function isGenerateLink(
-    content: GenerateLink
-): content is GenerateLink {
+function isPaymentLinkContent(
+    content: PaymentLinkContent
+): content is PaymentLinkContent {
     elizaLogger.log("Content for transfer", content);
     return (
         typeof content.title === "string" &&
@@ -44,78 +53,39 @@ function isGenerateLink(
 
 
 
-const generatelinkTemplate = `Respond with a JSON markdown block containing only the extracted values (title,description,amount,address and details) , make sure you get the title of the payment and address of the user. Title of payment , amount and address for the user to send tokens is compulsory. Only extract values beginning from the last time a payment link was created from the recent messages.
+const paymentLinkTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
 
 Example response:
 \`\`\`json
 {
-   "title":"Contribution for Davids Graduation Ceremony",
-   "description":"This contribution is for Davids Graduation Ceremony",
-   "amount":1000,
-   "address":"0xhjhhi1uiuio"
-   "details":{}
+    "details": {name:true,email:true},
+    "title": "Consulting Service",
+    "description": "2-hour consulting session for web development",
+    "amount": "150",
+    "address": "USD"
 }
 \`\`\`
 
-
-Given the recent messages , extract the following information about the requested generation Link:
--Title of the Payment
--Description of the Payment , let this be the summary of the payment
--Amount of the payment , let the amount be a number e.g 10USDC -> 10 , 20USDC -> 20
--address of the user to accept payment
--other details the user wants to collect from the payer.(like name , age , job description etc)...
-
-Here are the recent user messages for context:
 {{recentMessages}}
 
-`;
+Given the recent messages, extract the following information about the requested payment link:
+- Wallet address of the recipient
+- Title of the payment
+- Description of the payment
+- Amount to be paid
+- details (details to collect)
 
-function getLatestMessage(messages) {
-    if (!Array.isArray(messages) || messages.length === 0) {
-        return null;
-    }
+Respond with a JSON markdown block containing only the extracted values.`;
 
-    // Sort messages by createdAt in descending order and take the first one
-    const latestMessage = messages.reduce((latest, current) => {
-        return latest.createdAt > current.createdAt ? latest : current;
-    });
-
-    return {
-        id: latestMessage.id,
-        content: latestMessage.content,
-        createdAt: new Date(latestMessage.createdAt),
-        type: latestMessage.type,
-        roomId: latestMessage.roomId,
-        agentId: latestMessage.agentId
-    };
-}
-
-const isLatestMessageOlderThan24Hours = (messages: any): boolean => {
-    // Get the latest message
-    const latestMessage = messages.reduce((latest, current) => {
-        return latest.createdAt > current.createdAt ? latest : current;
-    });
-
-    // Get current time in milliseconds
-    const now = Date.now();
-
-    // Calculate 24 hours in milliseconds
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-
-    // Check if the time difference is greater than or equal to 24 hours
-    const timeDifference = now - latestMessage.createdAt;
-
-    return timeDifference >= twentyFourHours;
-};
 
 
 
 
 
 export const generateAction: Action = {
-    name: "GENERATELINK",
-    similes: ["CREATE_LINK", "GENERATE LINK", "CREATE_PAYMENT"],
-    description: "Generate payment Link for the user after collecting the title of payment , amount to collect , wallet address and details to collect",
+    name: "GENERATE_PAYMENT_LINK",
+    similes: ["CREATE_PAYMENT_LINK", "GET_PAYMENT_LINK", "MAKE_PAYMENT_LINK"],
+    description: "Generate a payment link for users with validated profiles",
     validate: async (
         runtime: IAgentRuntime,
         message: Memory,
@@ -127,7 +97,6 @@ export const generateAction: Action = {
         if (!SUPABASE_KEY) {
             return false
         }
-
         return true
     },
     handler: async (
@@ -143,119 +112,80 @@ export const generateAction: Action = {
         } else {
             state = await runtime.updateRecentMessageState(state)
         };
-        // console.log("recentMessages", state.recentMessagesData);
-        // console.log("Latest Messages", getLatestMessage(state.recentMessagesData));
-        console.log("message", message);
-        const recentMessagesData = await runtime.messageManager.getMemories({
-            roomId: message.roomId,
-            count: 10,
-            unique: false,
+
+        const paymentLinkSchema = z.object({
+            address: z.string(),
+            title: z.string(),
+            description: z.string(),
+            amount: z.union([z.string(), z.number()]),
+            details: z.object({})
         });
-        // const latest = getLatestMessage(recentMessagesData);
-        // console.log("latest",latest);
 
-        // console.log(recentMessagesData);
 
-        console.log("time difference", isLatestMessageOlderThan24Hours(recentMessagesData));
-
-        const getContent = composeContext({
+        const paymentLinkContext = composeContext({
             state,
-            template: generatelinkTemplate
-        })
-        const content = await generateObjectDeprecated({
-            runtime,
-            context: getContent,
-            modelClass: ModelClass.SMALL
+            template: paymentLinkTemplate,
         });
-        // console.log(content);
-        const transferContent = content as GenerateLink;
+        // runtime.processActions()
+
+        const content = await generateObject({
+            runtime,
+            context: paymentLinkContext,
+            schema: paymentLinkSchema,
+            modelClass: ModelClass.SMALL,
+        });
+
+        const paymentLinkContent = content.object as PaymentLinkContent;
         const supabaseUrl = 'https://gowfvrwxcjffdazpttem.supabase.co';
         const SUPABASE_KEY = runtime.getSetting("SUPABASE_KEY");
         const supabase = createClient(supabaseUrl, SUPABASE_KEY);
 
-        if (!isGenerateLink(transferContent)) {
-            console.error("Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill");
-            callback({
-                text: "Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill",
-                content: { error: "Make sure you provide the title of payment , amount you want to recieve , wallet address you want to recieve stablecoin and details you want your payers to fill" }
-            })
-            return false
-        }
-        // const { data, error } = await supabase.from("users").select("*").eq('roomId', message.roomId);
-
-        try {
-            const { data, error } = await supabase.from("users").select("*").eq('room_id', message.roomId);
-            if (data.length === 0) {
+        if (!isPaymentLinkContent(paymentLinkContent)) {
+            console.error("Invalid content for GENERATE_PAYMENT_LINK action.");
+            if (callback) {
                 callback({
-                    text: "You are not Eligible to create a payment link yet . Make sure you have created your user profile. Would you like to me to help you create a user profile",
-                    action: ""
-                })
-                // const { data: newUser, error: createError } = await supabase
-                //     .from('users')
-                //     .insert([{
-                //         agent_id: state.agentId,
-                //         payment_links_count: 0,
-                //         total_amount: 0
-                //     }])
-                //     .select()
-                //     .single();
-
-                // if (createError) throw createError;
-                // const code = generateUniqueCode();
-                // const { data, error } = await supabase.from("payments").insert([{
-                //     title: content.title,
-                //     code: code,
-                //     payment_description: content?.description,
-                //     amount: Number(content.amount),
-                //     address: content.address,
-                //     details: content.details,
-                //     agent_id: state.agentId,
-                //     user_id: newUser?.id,
-                //     token_types: ['USDC'],
-                //     chains: ['sui'],
-                // }]).select();
-                // callback({
-                //     text: "Successfully created your payment link is",
-                //     content: { text: `Successfully created your payment link ...` },
-                //     url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
-                //     attachments: [{
-                //         url: `${PAYMENT_URL_BASE}/${data[0]?.id}`,
-                //         title: `${content.title} payment link`,
-                //         description: `${content?.description || ""}`,
-                //         source: `Fourier`,
-                //         text: `${content?.description || ""}`,
-                //         id: `${data[0]?.id}`
-                //     }]
-                // })
-            } else {
-                const code = generateUniqueCode();
-                const { data: Newdata, error } = await supabase.from("payments").insert([{
-                    title: content.title,
-                    code: code,
-                    payment_description: content?.description,
-                    amount: Number(content.amount),
-                    address: content.address,
-                    details: content.details,
-                    agent_id: state.agentId,
-                    user_id: data[0]?.id,
-                    token_types: ['USDC'],
-                    chains: ['sui'],
-                }]).select();
-
-                if (error) {
-                    console.error('Insert error:', error); // Debug log
-                    throw error;
-                }
-                callback({
-                    text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}`,
-                    content: { text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}` }
-                })
+                    text: "Unable to process payment link request. Invalid content provided.",
+                    content: { error: "Invalid payment link content" },
+                });
             }
+            return false;
+        }
+        try {
+            // const { data, error } = await supabase.from("users").select("*").eq('room_id', message.roomId);
+            // if (data.length === 0) {
+            //     callback({
+            //         text: "You are not Eligible to create a payment link yet . Make sure you have created your user profile. Would you like to me to help you create a user profile",
+            //         action: ""
+            //     })
+            // } else {
+            //     const code = generateUniqueCode();
+            //     const { data: Newdata, error } = await supabase.from("payments").insert([{
+            //         title: content.title,
+            //         code: code,
+            //         payment_description: content?.description,
+            //         amount: Number(content.amount),
+            //         address: content.address,
+            //         details: content.details,
+            //         agent_id: state.agentId,
+            //         user_id: data[0]?.id,
+            //         token_types: ['USDC'],
+            //         chains: ['sui'],
+            //     }]).select();
+
+            //     if (error) {
+            //         console.error('Insert error:', error); // Debug log
+            //         throw error;
+            //     }
+            //     callback({
+            //         text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}`,
+            //         content: { text: `Successfully created your payment link is ${PAYMENT_URL_BASE}/${code}` }
+            //     })
+            // }
         } catch (error) {
-            callback({
-                text: "Unable to process Payment Link Generation.",
-                content: { error: "Error in Payment Generation" }
-            })
+            // callback({
+            //     text: "Unable to process Payment Link Generation.",
+            //     content: { error: "Error in Payment Generation" }
+            // })
         }
         return true
     },
