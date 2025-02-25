@@ -13,6 +13,7 @@ import {
 import { z } from "zod";
 import { createClient } from '@supabase/supabase-js';
 import { generateUniqueCode } from "../utils";
+import { userProfileProvider } from "../providers/userprovider";
 
 
 // interface GenerateLink extends Content {
@@ -97,6 +98,12 @@ export const generateAction: Action = {
         if (!SUPABASE_KEY) {
             return false
         }
+        const userProfile = await userProfileProvider.get(runtime, message, state);
+        console.log(userProfile);
+        console.log("validating user Profile...")
+        if (userProfile === null) {
+            return false
+        }
         return true
     },
     handler: async (
@@ -151,6 +158,8 @@ export const generateAction: Action = {
             return false;
         }
         try {
+            console.log(message.content.text);
+
             // const { data, error } = await supabase.from("users").select("*").eq('room_id', message.roomId);
             // if (data.length === 0) {
             //     callback({
